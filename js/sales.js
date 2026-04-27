@@ -167,7 +167,11 @@ window.viewSale = id => {
       <thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>الوحدة</th><th>السعر</th><th>المجموع</th></tr></thead>
       <tbody>${(s.items || []).map((item, i) => `
         <tr>
-          <td>${i+1}</td><td>${esc(item.productName)}</td>
+          <td>${i+1}</td>
+          <td><div class="prod-name-cell">
+            ${item.imageBase64 ? `<img src="${item.imageBase64}" class="prod-thumb" alt="">` : ''}
+            ${esc(item.productName)}
+          </div></td>
           <td>${item.qty}</td><td>${esc(item.unit||'-')}</td>
           <td>${formatCurrency(item.sellPrice)}</td>
           <td class="fw-600">${formatCurrency(item.total)}</td>

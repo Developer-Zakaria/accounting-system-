@@ -134,7 +134,8 @@ function addSaleItem() {
       qty,
       buyPrice:    product.buyPrice || 0,
       sellPrice:   price,
-      total:       qty * price
+      total:       qty * price,
+      imageBase64: product.imageBase64 || null
     });
   }
 

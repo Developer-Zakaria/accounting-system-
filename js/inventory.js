@@ -22,11 +22,7 @@ export async function loadInventory(container) {
         <button class="btn btn-primary" id="btn-add-product">+ إضافة منتج</button>
       </div>
     </div>
-
-    <!-- Stats -->
     <div class="stats-grid mb-3" id="inv-stats"></div>
-
-    <!-- Filter -->
     <div class="search-bar">
       <div class="search-input-wrap">
         <span class="search-icon">🔍</span>
@@ -41,8 +37,6 @@ export async function loadInventory(container) {
         <option value="ok">مخزون كافٍ</option>
       </select>
     </div>
-
-    <!-- Table -->
     <div class="card">
       <div class="card-body p-0" id="inv-table-wrap">
         <div class="loading-page"><div class="spinner"></div></div>
@@ -64,7 +58,6 @@ async function refreshInventory() {
   const snap = await getDocs(query(collection(db, COL), orderBy('name')));
   allProducts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
-  // Fill categories
   const cats = [...new Set(allProducts.map(p => p.category).filter(Boolean))].sort();
   const catSel = document.getElementById('inv-category');
   if (catSel) {
@@ -77,7 +70,6 @@ async function refreshInventory() {
   renderStats();
   renderTable(getFilteredProducts());
 
-  // Update badge
   const lowCount = allProducts.filter(p => (p.quantity || 0) <= (p.minQuantity || 0)).length;
   const badge = document.getElementById('badge-inventory');
   if (badge) badge.textContent = lowCount > 0 ? lowCount : '';
@@ -87,11 +79,8 @@ function getFilteredProducts() {
   const search = (document.getElementById('inv-search')?.value || '').toLowerCase();
   const cat    = document.getElementById('inv-category')?.value || '';
   const stockF = document.getElementById('inv-filter-stock')?.value || '';
-
   return allProducts.filter(p => {
-    const matchSearch = !search ||
-      p.name?.toLowerCase().includes(search) ||
-      p.category?.toLowerCase().includes(search);
+    const matchSearch = !search || p.name?.toLowerCase().includes(search) || p.category?.toLowerCase().includes(search);
     const matchCat   = !cat    || p.category === cat;
     const isLow      = (p.quantity || 0) <= (p.minQuantity || 0);
     const matchStock = !stockF || (stockF === 'low' ? isLow : !isLow);
@@ -108,34 +97,18 @@ function renderStats() {
   const sellValue  = allProducts.reduce((s, p) => s + (p.quantity || 0) * (p.sellPrice || 0), 0);
 
   el.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-icon blue">📦</div>
-      <div class="stat-info">
-        <div class="stat-label">إجمالي المنتجات</div>
-        <div class="stat-value">${totalItems}</div>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon red">⚠️</div>
-      <div class="stat-info">
-        <div class="stat-label">مخزون منخفض</div>
-        <div class="stat-value text-danger">${lowStock}</div>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon orange">💰</div>
-      <div class="stat-info">
-        <div class="stat-label">قيمة المخزون (شراء)</div>
-        <div class="stat-value">${formatCurrency(totalValue)}</div>
-      </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon green">📈</div>
-      <div class="stat-info">
-        <div class="stat-label">قيمة المخزون (بيع)</div>
-        <div class="stat-value text-success">${formatCurrency(sellValue)}</div>
-      </div>
-    </div>`;
+    <div class="stat-card"><div class="stat-icon blue">📦</div><div class="stat-info">
+      <div class="stat-label">إجمالي المنتجات</div><div class="stat-value">${totalItems}</div>
+    </div></div>
+    <div class="stat-card"><div class="stat-icon red">⚠️</div><div class="stat-info">
+      <div class="stat-label">مخزون منخفض</div><div class="stat-value text-danger">${lowStock}</div>
+    </div></div>
+    <div class="stat-card"><div class="stat-icon orange">💰</div><div class="stat-info">
+      <div class="stat-label">قيمة المخزون (شراء)</div><div class="stat-value">${formatCurrency(totalValue)}</div>
+    </div></div>
+    <div class="stat-card"><div class="stat-icon green">📈</div><div class="stat-info">
+      <div class="stat-label">قيمة المخزون (بيع)</div><div class="stat-value text-success">${formatCurrency(sellValue)}</div>
+    </div></div>`;
 }
 
 function renderTable(products) {
@@ -152,58 +125,113 @@ function renderTable(products) {
   }
 
   wrap.innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead>
+    <div class="table-wrap"><table>
+      <thead><tr>
+        <th>#</th><th>المنتج</th><th>الفئة</th><th>الوحدة</th>
+        <th>سعر الشراء</th><th>سعر البيع</th><th>الكمية</th>
+        <th>الحد الأدنى</th><th>الحالة</th><th>الإجراءات</th>
+      </tr></thead>
+      <tbody>
+        ${products.map((p, i) => {
+          const isLow = (p.quantity || 0) <= (p.minQuantity || 0);
+          const thumb = p.imageBase64
+            ? `<img src="${p.imageBase64}" class="prod-thumb" alt="">`
+            : `<span class="prod-thumb-icon">📦</span>`;
+          return `
           <tr>
-            <th>#</th>
-            <th>اسم المنتج</th>
-            <th>الفئة</th>
-            <th>الوحدة</th>
-            <th>سعر الشراء</th>
-            <th>سعر البيع</th>
-            <th>الكمية</th>
-            <th>الحد الأدنى</th>
-            <th>الحالة</th>
-            <th>الإجراءات</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${products.map((p, i) => {
-            const isLow = (p.quantity || 0) <= (p.minQuantity || 0);
-            return `
-            <tr>
-              <td class="text-muted text-sm">${i + 1}</td>
-              <td class="fw-600">${esc(p.name)}</td>
-              <td class="text-muted">${esc(p.category || '-')}</td>
-              <td class="text-muted">${esc(p.unit || '-')}</td>
-              <td>${formatCurrency(p.buyPrice)}</td>
-              <td class="text-success">${formatCurrency(p.sellPrice)}</td>
-              <td class="${isLow ? 'text-danger fw-bold' : 'fw-600'}">${p.quantity || 0}</td>
-              <td class="text-muted">${p.minQuantity || 0}</td>
-              <td>${isLow
-                ? `<span class="badge badge-danger">⚠️ منخفض</span>`
-                : `<span class="badge badge-success">✅ كافٍ</span>`}</td>
-              <td>
-                <div class="table-actions">
-                  <button class="btn-icon-only" onclick="editProduct('${p.id}')" title="تعديل">✏️</button>
-                  <button class="btn-icon-only" onclick="adjustQty('${p.id}')" title="تعديل الكمية">📊</button>
-                  <button class="btn-icon-only" onclick="deleteProduct('${p.id}')" title="حذف">🗑️</button>
-                </div>
-              </td>
-            </tr>`;
-          }).join('')}
-        </tbody>
-      </table>
-    </div>`;
+            <td class="text-muted text-sm">${i + 1}</td>
+            <td><div class="prod-name-cell">${thumb}<span class="fw-600">${esc(p.name)}</span></div></td>
+            <td class="text-muted">${esc(p.category || '-')}</td>
+            <td class="text-muted">${esc(p.unit || '-')}</td>
+            <td>${formatCurrency(p.buyPrice)}</td>
+            <td class="text-success">${formatCurrency(p.sellPrice)}</td>
+            <td class="${isLow ? 'text-danger fw-bold' : 'fw-600'}">${p.quantity || 0}</td>
+            <td class="text-muted">${p.minQuantity || 0}</td>
+            <td>${isLow
+              ? `<span class="badge badge-danger">⚠️ منخفض</span>`
+              : `<span class="badge badge-success">✅ كافٍ</span>`}</td>
+            <td><div class="table-actions">
+              <button class="btn-icon-only" onclick="editProduct('${p.id}')" title="تعديل">✏️</button>
+              <button class="btn-icon-only" onclick="adjustQty('${p.id}')" title="تعديل الكمية">📊</button>
+              <button class="btn-icon-only" onclick="deleteProduct('${p.id}')" title="حذف">🗑️</button>
+            </div></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table></div>`;
+}
+
+// ── Image Compression ─────────────────────────────────────
+async function compressImage(file, maxPx = 320) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const scale  = Math.min(maxPx / img.width, maxPx / img.height, 1);
+        const canvas = document.createElement('canvas');
+        canvas.width  = Math.round(img.width  * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.78));
+      };
+      img.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Image Upload Binding ──────────────────────────────────
+function bindImageUpload(product) {
+  const imgPrev = document.getElementById('img-prev');
+  const imgPh   = document.getElementById('img-ph');
+  const imgDel  = document.getElementById('img-del');
+  const imgFile = document.getElementById('img-file');
+  const imgB64  = document.getElementById('img-base64');
+
+  const showImg = b64 => {
+    imgPrev.src = b64; imgB64.value = b64;
+    imgPrev.style.display = 'block';
+    imgPh.style.display   = 'none';
+    imgDel.style.display  = 'flex';
+  };
+  const clearImg = () => {
+    imgPrev.src = ''; imgB64.value = ''; imgFile.value = '';
+    imgPrev.style.display = 'none';
+    imgPh.style.display   = 'flex';
+    imgDel.style.display  = 'none';
+  };
+
+  if (product?.imageBase64) showImg(product.imageBase64);
+
+  document.getElementById('img-area').addEventListener('click', () => imgFile.click());
+  imgDel.addEventListener('click', e => { e.stopPropagation(); clearImg(); });
+  imgFile.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (file) showImg(await compressImage(file));
+  });
 }
 
 // ── Product Modal ─────────────────────────────────────────
 function openProductModal(product = null) {
   const isEdit = !!product;
-  const title  = isEdit ? 'تعديل منتج' : 'إضافة منتج جديد';
+  openModal(isEdit ? 'تعديل منتج' : 'إضافة منتج جديد', `
+    <!-- Image Upload -->
+    <div class="form-group form-full" style="margin-bottom:20px">
+      <label class="form-label">📷 صورة المنتج</label>
+      <div class="img-upload-area" id="img-area">
+        <img id="img-prev" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover" alt="">
+        <div id="img-ph" class="img-upload-ph">
+          <span style="font-size:44px">📷</span>
+          <span style="font-size:14px;font-weight:700;color:var(--primary)">اضغط لإضافة صورة</span>
+          <span style="font-size:12px">من الكاميرا أو معرض الصور</span>
+        </div>
+        <button type="button" id="img-del" class="img-del-btn" style="display:none">✕</button>
+      </div>
+      <input type="file" id="img-file" accept="image/*" style="display:none">
+      <input type="hidden" id="img-base64" value="">
+    </div>
 
-  openModal(title, `
     <div class="form-grid">
       <div class="form-group">
         <label class="form-label">اسم المنتج <span class="required">*</span></label>
@@ -249,29 +277,31 @@ function openProductModal(product = null) {
     </div>
   `);
 
-  // Expose closeModal globally for onclick
   window.closeModal = closeModal;
-
-  document.getElementById('btn-save-product').addEventListener('click', () =>
-    saveProduct(product?.id || null));
+  bindImageUpload(product);
+  document.getElementById('btn-save-product').addEventListener('click', () => saveProduct(product?.id || null));
 }
 
 async function saveProduct(id) {
-  const name      = document.getElementById('f-name')?.value.trim();
-  const category  = document.getElementById('f-category')?.value.trim();
-  const unit      = document.getElementById('f-unit')?.value;
-  const qty       = parseNum(document.getElementById('f-qty')?.value);
-  const minQty    = parseNum(document.getElementById('f-min-qty')?.value);
-  const buyPrice  = parseNum(document.getElementById('f-buy-price')?.value);
-  const sellPrice = parseNum(document.getElementById('f-sell-price')?.value);
-  const notes     = document.getElementById('f-notes')?.value.trim();
+  const name        = document.getElementById('f-name')?.value.trim();
+  const category    = document.getElementById('f-category')?.value.trim();
+  const unit        = document.getElementById('f-unit')?.value;
+  const qty         = parseNum(document.getElementById('f-qty')?.value);
+  const minQty      = parseNum(document.getElementById('f-min-qty')?.value);
+  const buyPrice    = parseNum(document.getElementById('f-buy-price')?.value);
+  const sellPrice   = parseNum(document.getElementById('f-sell-price')?.value);
+  const notes       = document.getElementById('f-notes')?.value.trim();
+  const imageBase64 = document.getElementById('img-base64')?.value || null;
 
   if (!name) return toast('الرجاء إدخال اسم المنتج', 'error');
   if (buyPrice <= 0)  return toast('الرجاء إدخال سعر الشراء', 'error');
   if (sellPrice <= 0) return toast('الرجاء إدخال سعر البيع', 'error');
 
-  const data = { name, category, unit, quantity: qty, minQuantity: minQty,
-                 buyPrice, sellPrice, notes, updatedAt: serverTimestamp() };
+  const data = {
+    name, category, unit, quantity: qty, minQuantity: minQty,
+    buyPrice, sellPrice, notes, imageBase64,
+    updatedAt: serverTimestamp()
+  };
 
   try {
     const btn = document.getElementById('btn-save-product');
@@ -292,7 +322,7 @@ async function saveProduct(id) {
   }
 }
 
-// Adjust quantity modal
+// ── Adjust Quantity Modal ─────────────────────────────────
 function openAdjustModal(product) {
   openModal('تعديل الكمية', `
     <p class="mb-2">المنتج: <strong>${esc(product.name)}</strong></p>
@@ -323,12 +353,10 @@ function openAdjustModal(product) {
     const type = document.getElementById('adj-type').value;
     const qty  = parseNum(document.getElementById('adj-qty').value);
     if (!qty && type !== 'set') return toast('أدخل الكمية', 'error');
-
     let newQty = product.quantity || 0;
     if (type === 'add') newQty += qty;
     else if (type === 'sub') newQty = Math.max(0, newQty - qty);
     else newQty = qty;
-
     await updateDoc(doc(db, COL, product.id), { quantity: newQty, updatedAt: serverTimestamp() });
     toast('تم تحديث الكمية', 'success');
     closeModal();

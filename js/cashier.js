@@ -162,14 +162,16 @@ function renderGrid() {
   }
 
   grid.innerHTML = products.map(p => {
-    const isOut = (p.quantity || 0) <= 0;
-    const isLow = !isOut && (p.quantity || 0) <= (p.minQuantity || 0);
-    const icon  = UNIT_ICONS[p.unit] || '📦';
+    const isOut  = (p.quantity || 0) <= 0;
+    const isLow  = !isOut && (p.quantity || 0) <= (p.minQuantity || 0);
+    const media  = p.imageBase64
+      ? `<img src="${p.imageBase64}" class="tile-img" alt="">`
+      : `<span class="tile-icon">${UNIT_ICONS[p.unit] || '📦'}</span>`;
     return `
     <div class="product-tile${isOut ? ' out-of-stock' : ''}"
          onclick="posAddProduct('${p.id}')" title="${esc(p.name)}">
       <span class="tile-stock ${isLow ? 'low' : ''}">${p.quantity || 0}</span>
-      <span class="tile-icon">${icon}</span>
+      ${media}
       <span class="tile-name">${esc(p.name)}</span>
       <span class="tile-price">${formatCurrency(p.sellPrice)}</span>
       <span class="tile-unit">/ ${esc(p.unit || 'وحدة')}</span>

@@ -20,6 +20,9 @@ export function openQtyModal(product, addToCartFn) {
 
   openModal('إضافة للسلة', `
     <div class="qty-modal-body">
+      ${product.imageBase64
+        ? `<img src="${product.imageBase64}" style="width:90px;height:90px;object-fit:cover;border-radius:16px;border:2px solid var(--border);margin-bottom:10px" alt="">`
+        : ''}
       <div class="qty-modal-product">${esc(product.name)}</div>
       <div class="qty-modal-unit">
         سعر البيع: <strong>${formatCurrency(product.sellPrice)} / ${esc(product.unit||'وحدة')}</strong>

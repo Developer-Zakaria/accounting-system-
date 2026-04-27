@@ -8,6 +8,8 @@ import { loadCustomers }                  from './customers.js';
 import { loadSuppliers }                  from './suppliers.js';
 import { loadExpenses }                   from './expenses.js';
 import { loadReports }                    from './reports.js';
+import { loadCashier }                    from './cashier.js';
+import { addHelp }                        from './help.js';
 
 // Expose closeModal globally (used by inline onclick in modals)
 window.closeModal = closeModal;
@@ -22,14 +24,15 @@ function doLogout()   { sessionStorage.removeItem(SESSION_KEY); }
 
 // ── Page Registry ─────────────────────────────────────────
 const PAGES = {
-  dashboard: { title: 'لوحة التحكم',  loader: loadDashboard },
-  sales:     { title: 'المبيعات',      loader: loadSales     },
-  purchases: { title: 'المشتريات',    loader: loadPurchases  },
-  inventory: { title: 'المخزون',       loader: loadInventory  },
-  customers: { title: 'العملاء',       loader: loadCustomers  },
-  suppliers: { title: 'الموردون',     loader: loadSuppliers  },
-  expenses:  { title: 'المصاريف',     loader: loadExpenses   },
-  reports:   { title: 'التقارير',      loader: loadReports    },
+  dashboard: { title: 'لوحة التحكم',        loader: loadDashboard },
+  cashier:   { title: 'الكاشير',             loader: loadCashier   },
+  sales:     { title: 'المبيعات',            loader: loadSales     },
+  purchases: { title: 'المشتريات',          loader: loadPurchases  },
+  inventory: { title: 'المخزون',             loader: loadInventory  },
+  customers: { title: 'العملاء',             loader: loadCustomers  },
+  suppliers: { title: 'الموردون',           loader: loadSuppliers  },
+  expenses:  { title: 'المصاريف',           loader: loadExpenses   },
+  reports:   { title: 'التقارير',            loader: loadReports    },
 };
 
 let currentPage = 'dashboard';
@@ -60,9 +63,9 @@ function showApp() {
 }
 
 function bindLoginForm() {
-  const form   = document.getElementById('login-form');
-  const errEl  = document.getElementById('login-error');
-  const pwInput = document.getElementById('password');
+  const form      = document.getElementById('login-form');
+  const errEl     = document.getElementById('login-error');
+  const pwInput   = document.getElementById('password');
   const toggleBtn = document.getElementById('toggle-pw');
 
   toggleBtn?.addEventListener('click', () => {
@@ -72,8 +75,8 @@ function bindLoginForm() {
 
   form.addEventListener('submit', e => {
     e.preventDefault();
-    const u = document.getElementById('username').value.trim();
-    const p = document.getElementById('password').value;
+    const u   = document.getElementById('username').value.trim();
+    const p   = document.getElementById('password').value;
     const btn = document.querySelector('.login-btn');
 
     if (u === CREDENTIALS.username && p === CREDENTIALS.password) {
@@ -126,8 +129,10 @@ export function navigateTo(page) {
   // Close sidebar on mobile
   closeSidebarMobile();
 
-  // Load page
-  PAGES[page].loader(content);
+  // Load page then add help button
+  Promise.resolve(PAGES[page].loader(content)).then(() => {
+    addHelp(content, page);
+  });
 }
 
 // Bind nav links

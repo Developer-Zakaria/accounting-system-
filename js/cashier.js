@@ -1,12 +1,12 @@
 /* ===== Cashier / POS Page ===== */
 import { db } from './firebase-config.js';
 import {
-  collection, getDocs, query, orderBy, serverTimestamp, writeBatch, doc
+  collection, getDocs, query, orderBy
 } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 import {
-  formatCurrency, esc, toast, openModal, closeModal,
-  today, parseNum, shortId
+  formatCurrency, esc, toast, parseNum
 } from './utils.js';
+import { openQtyModal, completeSale } from './cashier-sale.js';
 
 // ── State ─────────────────────────────────────────────────
 let allProducts  = [];
@@ -162,9 +162,9 @@ function renderGrid() {
   }
 
   grid.innerHTML = products.map(p => {
-    const isOut   = (p.quantity || 0) <= 0;
-    const isLow   = !isOut && (p.quantity || 0) <= (p.minQuantity || 0);
-    const icon    = UNIT_ICONS[p.unit] || '📦';
+    const isOut = (p.quantity || 0) <= 0;
+    const isLow = !isOut && (p.quantity || 0) <= (p.minQuantity || 0);
+    const icon  = UNIT_ICONS[p.unit] || '📦';
     return `
     <div class="product-tile${isOut ? ' out-of-stock' : ''}"
          onclick="posAddProduct('${p.id}')" title="${esc(p.name)}">
@@ -181,82 +181,7 @@ function renderGrid() {
 window.posAddProduct = id => {
   const product = allProducts.find(p => p.id === id);
   if (!product) return;
-  openQtyModal(product);
-};
-
-function openQtyModal(product) {
-  const isWeight = ['كيلو','غرام','لتر'].includes(product.unit);
-  const quickQtys = isWeight
-    ? ['¼', '½', '¾', '1', '2', '3', '5', '10']
-    : ['1', '2', '3', '5', '10', '20', '50', '100'];
-  const quickVals = isWeight
-    ? [0.25, 0.5, 0.75, 1, 2, 3, 5, 10]
-    : [1, 2, 3, 5, 10, 20, 50, 100];
-
-  openModal(`إضافة للسلة`, `
-    <div class="qty-modal-body">
-      <div class="qty-modal-product">${esc(product.name)}</div>
-      <div class="qty-modal-unit">
-        سعر البيع: <strong>${formatCurrency(product.sellPrice)} / ${esc(product.unit||'وحدة')}</strong>
-        &nbsp;|&nbsp; متوفر: <strong>${product.quantity || 0} ${esc(product.unit||'')}</strong>
-      </div>
-
-      <div class="quick-qty-grid">
-        ${quickQtys.map((label, i) => `
-          <button class="quick-qty-btn${i===3?' selected':''}"
-                  data-val="${quickVals[i]}"
-                  onclick="posSetQty(${quickVals[i]},this)">${label}</button>`
-        ).join('')}
-      </div>
-
-      <div class="custom-qty-wrap">
-        <input type="number" id="modal-qty" class="custom-qty-input"
-               value="${isWeight ? 1 : 1}" min="0.01" step="${isWeight ? 0.25 : 1}"
-               placeholder="كمية مخصصة">
-        <span style="font-size:16px;font-weight:700;color:var(--text-muted)">${esc(product.unit||'')}</span>
-      </div>
-
-      <div class="qty-preview" id="qty-preview">
-        الإجمالي: <strong>${formatCurrency(product.sellPrice)}</strong>
-      </div>
-    </div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal()">إلغاء</button>
-      <button class="btn btn-primary btn-lg" id="btn-add-to-cart">
-        🛒 إضافة للسلة
-      </button>
-    </div>
-  `, 'sm');
-
-  window.closeModal = closeModal;
-
-  // Live price preview
-  const qtyInput = document.getElementById('modal-qty');
-  const preview  = document.getElementById('qty-preview');
-  qtyInput?.addEventListener('input', () => {
-    const q = parseNum(qtyInput.value, 0);
-    if (preview) preview.innerHTML = `الإجمالي: <strong>${formatCurrency(q * product.sellPrice)}</strong>`;
-    document.querySelectorAll('.quick-qty-btn').forEach(b => b.classList.remove('selected'));
-  });
-
-  document.getElementById('btn-add-to-cart')?.addEventListener('click', () => {
-    const qty = parseNum(document.getElementById('modal-qty')?.value, 0);
-    if (qty <= 0) return toast('أدخل كمية صحيحة', 'error');
-    if (qty > (product.quantity || 0)) return toast(`الكمية المتوفرة ${product.quantity} فقط`, 'warning');
-    addToCart(product, qty);
-    closeModal();
-    toast(`✅ تمت إضافة ${qty} ${product.unit || ''} ${product.name}`, 'success', 1500);
-  });
-}
-
-window.posSetQty = (val, btn) => {
-  const input = document.getElementById('modal-qty');
-  if (input) {
-    input.value = val;
-    input.dispatchEvent(new Event('input'));
-  }
-  document.querySelectorAll('.quick-qty-btn').forEach(b => b.classList.remove('selected'));
-  btn?.classList.add('selected');
+  openQtyModal(product, addToCart);
 };
 
 function addToCart(product, qty) {
@@ -321,11 +246,11 @@ function renderCart() {
 }
 
 function updateTotals() {
-  const subtotal = cart.reduce((a, i) => a + i.total, 0);
+  const subtotal  = cart.reduce((a, i) => a + i.total, 0);
   const totalCost = cart.reduce((a, i) => a + i.qty * i.buyPrice, 0);
-  const discount = parseNum(document.getElementById('pos-discount')?.value);
-  const total    = subtotal - discount;
-  const profit   = total - totalCost;
+  const discount  = parseNum(document.getElementById('pos-discount')?.value);
+  const total     = subtotal - discount;
+  const profit    = total - totalCost;
 
   const el = document.getElementById('pos-totals');
   if (!el) return;
@@ -337,10 +262,7 @@ function updateTotals() {
 }
 
 // Cart item controls
-window.posRemoveItem = i => {
-  cart.splice(i, 1);
-  renderCart();
-};
+window.posRemoveItem = i => { cart.splice(i, 1); renderCart(); };
 
 window.posChangeQty = (i, delta) => {
   const item    = cart[i];
@@ -360,7 +282,7 @@ window.posChangeQty = (i, delta) => {
 window.posSetCartQty = (i, val) => {
   const qty     = parseNum(val, 0);
   const product = allProducts.find(p => p.id === cart[i]?.productId);
-  if (qty <= 0) { posRemoveItem(i); return; }
+  if (qty <= 0) { window.posRemoveItem(i); return; }
   if (qty > (product?.quantity || 0)) {
     toast(`الكمية المتوفرة ${product?.quantity || 0} فقط`, 'warning');
     return;
@@ -370,145 +292,10 @@ window.posSetCartQty = (i, val) => {
   renderCart();
 };
 
-// ── Complete Sale ─────────────────────────────────────────
-async function completeSale() {
-  if (cart.length === 0) return toast('السلة فارغة!', 'error');
-
-  const custId    = document.getElementById('pos-customer')?.value || '';
-  const discount  = parseNum(document.getElementById('pos-discount')?.value);
-  const subtotal  = cart.reduce((a, i) => a + i.total, 0);
-  const totalCost = cart.reduce((a, i) => a + i.qty * i.buyPrice, 0);
-  const total     = subtotal - discount;
-  const profit    = total - totalCost;
-  const customer  = allCustomers.find(c => c.id === custId);
-  const invoiceNo = shortId();
-
-  const saleData = {
-    invoiceNo,
-    date:         today(),
-    customerId:   custId,
-    customerName: customer?.name || 'عميل نقدي',
-    items:        [...cart],
-    subtotal,
-    discount,
-    totalAmount:  total,
-    totalCost,
-    profit,
-    status:       paymentType,
-    paidAmount:   paymentType === 'paid' ? total : 0,
-    notes:        'كاشير',
-    createdAt:    serverTimestamp()
-  };
-
-  const btn = document.getElementById('pos-complete-btn');
-  if (btn) btn.disabled = true;
-
-  try {
-    const batch    = writeBatch(db);
-    const saleRef  = doc(collection(db, 'sales'));
-    batch.set(saleRef, saleData);
-
-    // Decrease stock
-    cart.forEach(item => {
-      const prod = allProducts.find(p => p.id === item.productId);
-      if (prod) {
-        batch.update(doc(db, 'inventory', item.productId), {
-          quantity:  Math.max(0, (prod.quantity || 0) - item.qty),
-          updatedAt: serverTimestamp()
-        });
-        prod.quantity = Math.max(0, (prod.quantity || 0) - item.qty);
-      }
-    });
-
-    // Update customer balance if credit
-    if (custId && paymentType === 'credit') {
-      const c = allCustomers.find(x => x.id === custId);
-      if (c) {
-        batch.update(doc(db, 'customers', custId), {
-          balance: (c.balance || 0) + total
-        });
-      }
-    }
-
-    await batch.commit();
-    printReceipt(saleData);
-    cart = [];
-    renderCart();
-    renderGrid();
-    document.getElementById('pos-discount').value = '0';
-    toast('✅ تم البيع وجاري طباعة الفاتورة!', 'success');
-  } catch (err) {
-    toast('خطأ: ' + err.message, 'error');
-    if (btn) btn.disabled = false;
-  }
-}
-
-// ── Print Receipt ─────────────────────────────────────────
-function printReceipt(sale) {
-  const now = new Date().toLocaleString('ar-SA');
-  const html = `<!DOCTYPE html><html dir="rtl"><head>
-    <meta charset="UTF-8"><title>فاتورة ${sale.invoiceNo}</title>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
-    <style>
-      * { margin:0; padding:0; box-sizing:border-box; }
-      body { font-family:Cairo,sans-serif; max-width:320px; margin:0 auto; padding:16px; font-size:13px; }
-      .center { text-align:center; }
-      .logo { font-size:20px; font-weight:900; color:#0D47A1; }
-      .sub  { font-size:12px; color:#64748B; margin-bottom:8px; }
-      .divider { border-top:1px dashed #CBD5E1; margin:8px 0; }
-      .info  { display:flex; justify-content:space-between; font-size:12px; margin:3px 0; color:#374151; }
-      table  { width:100%; border-collapse:collapse; margin:6px 0; }
-      th     { font-size:11px; padding:5px 3px; border-bottom:1px solid #E2E8F0; text-align:right; }
-      td     { font-size:12px; padding:5px 3px; border-bottom:1px solid #F1F5F9; }
-      .total-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
-      .grand     { font-size:17px; font-weight:900; color:#0D47A1; border-top:2px solid #0D47A1; padding-top:6px; margin-top:4px; }
-      .footer    { text-align:center; margin-top:14px; font-size:11px; color:#94A3B8; }
-      @media print { @page { margin:0; size:80mm auto; } }
-    </style></head><body>
-    <div class="center">
-      <div class="logo">مؤسسة جون سعادة</div>
-      <div class="sub">نظام المحاسبة للجملة</div>
-    </div>
-    <div class="divider"></div>
-    <div class="info"><span>رقم الفاتورة:</span><strong>${sale.invoiceNo}</strong></div>
-    <div class="info"><span>التاريخ:</span><span>${now}</span></div>
-    <div class="info"><span>العميل:</span><span>${esc(sale.customerName)}</span></div>
-    <div class="info"><span>الدفع:</span><span>${sale.status === 'paid' ? 'نقدي' : 'آجل'}</span></div>
-    <div class="divider"></div>
-    <table>
-      <thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th>المجموع</th></tr></thead>
-      <tbody>
-        ${(sale.items||[]).map(item => `
-          <tr>
-            <td>${esc(item.productName)}</td>
-            <td>${item.qty} ${esc(item.unit||'')}</td>
-            <td>${item.sellPrice.toLocaleString()}</td>
-            <td><strong>${item.total.toLocaleString()}</strong></td>
-          </tr>`).join('')}
-      </tbody>
-    </table>
-    <div class="divider"></div>
-    <div class="total-row"><span>المجموع الفرعي</span><span>${sale.subtotal.toLocaleString()}</span></div>
-    ${sale.discount > 0
-      ? `<div class="total-row"><span>الخصم</span><span>- ${sale.discount.toLocaleString()}</span></div>`
-      : ''}
-    <div class="total-row grand"><span>الإجمالي</span><span>${sale.totalAmount.toLocaleString()} د.ع</span></div>
-    <div class="footer">
-      شكراً لتعاملكم مع مؤسسة جون سعادة 🙏
-    </div>
-    <script>window.onload=()=>{window.print();}<\/script>
-  </body></html>`;
-
-  const win = window.open('', '_blank', 'width=400,height=600');
-  if (win) { win.document.write(html); win.document.close(); }
-}
-
 // ── Events ────────────────────────────────────────────────
 function bindEvents() {
-  // Search
   document.getElementById('pos-search')?.addEventListener('input', renderGrid);
 
-  // Category tabs
   document.getElementById('pos-cat-tabs')?.addEventListener('click', e => {
     const btn = e.target.closest('.cat-tab');
     if (!btn) return;
@@ -518,24 +305,34 @@ function bindEvents() {
     renderGrid();
   });
 
-  // Discount
   document.getElementById('pos-discount')?.addEventListener('input', updateTotals);
 
-  // Payment type
   document.querySelectorAll('.pay-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       paymentType = btn.dataset.type || 'paid';
-      document.querySelectorAll('.pay-btn').forEach(b => {
-        b.classList.remove('active');
-      });
+      document.querySelectorAll('.pay-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     });
   });
 
-  // Complete sale
-  document.getElementById('pos-complete-btn')?.addEventListener('click', completeSale);
+  document.getElementById('pos-complete-btn')?.addEventListener('click', () => {
+    completeSale({
+      cart,
+      allProducts,
+      allCustomers,
+      paymentType,
+      getDiscount:    () => parseNum(document.getElementById('pos-discount')?.value),
+      getCustomerId:  () => document.getElementById('pos-customer')?.value || '',
+      onSuccess: () => {
+        cart = [];
+        renderCart();
+        renderGrid();
+        const discEl = document.getElementById('pos-discount');
+        if (discEl) discEl.value = '0';
+      }
+    });
+  });
 
-  // Clear cart
   document.getElementById('pos-clear-btn')?.addEventListener('click', () => {
     if (cart.length === 0) return;
     cart = [];
